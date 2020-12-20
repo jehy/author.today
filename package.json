@@ -1,6 +1,6 @@
 {
   "name": "author.today",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "bundle.js",
   "scripts": {
@@ -16,6 +16,6 @@
     "puppeteer-extra": "^3.1.15",
     "puppeteer-extra-plugin-adblocker": "^2.11.9",
     "puppeteer-extra-plugin-stealth": "^2.6.5",
-    "typescript": "^4.1.2"
+    "typescript": "^4.1.3"
   }
 }
