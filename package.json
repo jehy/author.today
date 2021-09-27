@@ -6,19 +6,20 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "download": "npm run build && node download.js",
-    "glue": "npm run build && node glue.js",
+    "download": "npm run build && DEBUG=author.today:* node download.js",
+    "glue": "npm run build && DEBUG=author.today:* node glue.js",
     "clean": "rm tmp/* -f",
     "lint": "eslint . --ext .ts"
   },
   "author": "Jehy<npm@jehy.ru>",
   "license": "MIT",
   "dependencies": {
-    "ebook-convert": "2.0.1",
+    "debug": "4.3.2",
     "puppeteer": "5.5.0",
     "puppeteer-extra": "^3.1.18",
     "puppeteer-extra-plugin-adblocker": "^2.11.11",
-    "puppeteer-extra-plugin-stealth": "^2.7.8"
+    "puppeteer-extra-plugin-stealth": "^2.7.8",
+    "to-flags": "0.2.0"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "4.31.1",

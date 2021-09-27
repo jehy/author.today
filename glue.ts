@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import { join } from 'path';
-import { exec } from 'child_process';
-import convert from 'ebook-convert';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
+import Debug from 'debug';
+import toFlags from 'to-flags';
 
 function fixText(text: string) {
   const textSplit:string[] = text.split('\n');
@@ -23,8 +23,32 @@ function fixText(text: string) {
   return textSplit.splice(startFrom, count - startFrom).join('<br>\n');
 }
 
+async function convert(input, output, bookName, options) {
+  const log = Debug(`author.today:${bookName}:convertor`);
+  return new Promise((resolve, reject) => {
+    const run = spawn('ebook-convert', [input, output, ...toFlags(options)]);
+    run.stdout.on('data', (data) => {
+      log(`stdout: ${data}`);
+    });
+
+    run.stderr.on('data', (data) => {
+      log(`stderr: ${data}`);
+    });
+
+    run.on('close', (code) => {
+      if (code === 0) {
+        resolve(undefined);
+      } else {
+        reject();
+      }
+    });
+  });
+}
+
 async function glueBook(bookName: string, tmpDir:string) {
-  console.log(`Gluing book ${bookName}`);
+  const [name, author] = bookName.split(' - ').map((el) => el.trim());
+  const log = Debug(`author.today:${name}`);
+  log('Starting book');
   let data = '';
   const bookDir = join(tmpDir, `/${bookName}`);
   const htmlFileName = join(bookDir, `/${bookName}.html`);
@@ -34,15 +58,13 @@ async function glueBook(bookName: string, tmpDir:string) {
       fs.writeFileSync(htmlFileName, data, { encoding: 'utf8' });
       break;
     }
-    console.log(`Found chapter ${i}`);
+    log(`Found chapter ${i}`);
     const newText = fs.readFileSync(chapterFileName, 'utf-8');
     data += fixText(newText);
   }
-  const [name, author] = bookName.split(' - ').map((el) => el.trim());
+  const output = join(bookDir, `/${name}.mobi`);
   const options = {
-    input: `"${htmlFileName}"`,
-    output: `"${join(bookDir, `/${name}.mobi`)}"`,
-    authors: `"${author}"`,
+    authors: author,
     pageBreaksBefore: '//h:h1',
     chapter: '//h:h1',
     insertBlankLine: true,
@@ -50,10 +72,11 @@ async function glueBook(bookName: string, tmpDir:string) {
     lineHeight: '12',
   };
   try {
-    await promisify(convert)(options);
+    await convert(htmlFileName, output, bookName, options);
+    log('converted');
   } catch (err) {
-    console.log(`Failed to convert ${bookName}`);
-    console.log(err);
+    log(`Failed to convert ${bookName}`);
+    log(err);
   }
 }
 
@@ -61,7 +84,7 @@ async function glueBooks() {
   const tmpDir = join(__dirname, '/tmp');
   const books = fs.readdirSync(tmpDir);
   await Promise.all(books.map((book) => glueBook(book, tmpDir)));
-  exec(`dolphin "${tmpDir}"`);
+  spawn('dolphin', [tmpDir]);
 }
 
 glueBooks().then(() => process.exit(0));

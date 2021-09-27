@@ -8,6 +8,9 @@ import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
 import * as fs from 'fs';
 import { join } from 'path';
 import { Page, SetCookie } from 'puppeteer';
+import Debug from 'debug';
+
+const log = Debug('author.today:download');
 
 puppeteer.use(AdblockerPlugin()).use(StealthPlugin());
 
@@ -29,11 +32,11 @@ async function getPageText(page: Page): Promise<string> {
 }
 
 async function readPage(page: Page, id: number, bookDir: string) {
-  console.log(`Downloading page ${id}`);
+  log(`Downloading page ${id}`);
   await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
   const text = await getPageText(page);
   fs.writeFileSync(join(bookDir, `/${id}.txt`), text, { encoding: 'utf-8' });
-  console.log(`${text.substr(0, 100).split('\n').join('')}...`);
+  log(`${text.substr(0, 100).split('\n').join('')}...`);
   const nextPageLink = await page.$x("//a[contains(text(), '→')]");
 
   if (nextPageLink.length > 0) {
@@ -41,7 +44,7 @@ async function readPage(page: Page, id: number, bookDir: string) {
     return true;
   }
   // TODO somehow add check that book is finished. Simply check if that's the last chapter?
-  console.log('No next link found, possibly book end');
+  log('No next link found, possibly book end');
   return false;
 }
 
@@ -51,14 +54,11 @@ async function goToBookStart(page: Page, id: string) {
   await page.goto(`https://author.today/reader/${id}`);
   let notFirstPage = true;
   while (notFirstPage) {
-    // eslint-disable-next-line no-await-in-loop
     const nextPageLink = await page.$x("//a[contains(text(), '←')]");
 
     if (nextPageLink.length > 0) {
-      console.log('Not book start, going to previous page');
-      // eslint-disable-next-line no-await-in-loop
+      log('Not book start, going to previous page');
       await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
-      // eslint-disable-next-line no-await-in-loop
       await nextPageLink[0].click();
     } else {
       notFirstPage = false;
@@ -87,8 +87,8 @@ async function getBook(id: string, cookieFile: string) {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
   const cookies:Array<SetCookie> = cookieFile ? JSON.parse(fs.readFileSync(cookieFile, 'utf-8')) : [];
-  console.log('Cookies:');
-  console.log(cookies);
+  log('Cookies:');
+  log(cookies);
   await page.setCookie(...cookies);
   const bookTitle = await getBookTitle(page, id);
   await goToBookStart(page, id);
@@ -100,7 +100,6 @@ async function getBook(id: string, cookieFile: string) {
     fs.mkdirSync(bookDir);
   }
   while (pageFound) {
-    // eslint-disable-next-line no-await-in-loop
     pageFound = await readPage(page, pageId, bookDir);
     pageId++;
   }
@@ -110,6 +109,6 @@ async function getBook(id: string, cookieFile: string) {
 getBook(process.argv[2], process.argv[3])
   .then(() => process.exit(0))
   .catch((err) => {
-    console.log(err);
+    log(err);
     process.exit(1);
   });
