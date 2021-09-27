@@ -52,18 +52,14 @@ async function readPage(page: Page, id: number, bookDir: string) {
 async function goToBookStart(page: Page, id: string) {
   // todo ебанутая проверка, можно просто со страницы книги найти ссыль на первую главу
   await page.goto(`https://author.today/reader/${id}`);
-  let notFirstPage = true;
-  while (notFirstPage) {
-    const nextPageLink = await page.$x("//a[contains(text(), '←')]");
-
-    if (nextPageLink.length > 0) {
-      log('Not book start, going to previous page');
-      await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
-      await nextPageLink[0].click();
-    } else {
-      notFirstPage = false;
+  while (true) {
+    const prevPageLink = await page.$x("//a[contains(text(), '←')]");
+    if (prevPageLink.length === 0) {
       return;
     }
+    log('Not book start, going to previous page');
+    await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
+    await prevPageLink[0].click();
   }
 }
 
@@ -92,7 +88,6 @@ async function getBook(id: string, cookieFile: string) {
   await page.setCookie(...cookies);
   const bookTitle = await getBookTitle(page, id);
   await goToBookStart(page, id);
-  await page.goto(`https://author.today/reader/${id}`);
   let pageFound = true;
   let pageId = 1;
   const bookDir = join(dir, `/${bookTitle}`);
