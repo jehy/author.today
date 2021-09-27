@@ -5,6 +5,7 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
 
+import { promises as fsp } from 'fs';
 import * as fs from 'fs';
 import { join } from 'path';
 import { Page, SetCookie } from 'puppeteer';
@@ -24,10 +25,10 @@ async function getPageText(page: Page): Promise<string> {
       const element = document.querySelector(selector);
       // copyText.select();
       // document.execCommand("Copy");
-      return element.innerText;
+      return element.innerHTML;
     }
 
-    return copyText('#reader');
+    return copyText('#text-container');
   });
 }
 
@@ -35,7 +36,7 @@ async function readPage(page: Page, id: number, bookDir: string) {
   log(`Downloading page ${id}`);
   await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
   const text = await getPageText(page);
-  fs.writeFileSync(join(bookDir, `/${id}.txt`), text, { encoding: 'utf-8' });
+  await fsp.writeFile(join(bookDir, `/${id}.html`), text, { encoding: 'utf-8' });
   log(`${text.substr(0, 100).split('\n').join('')}...`);
   const nextPageLink = await page.$x("//a[contains(text(), '→')]");
 
@@ -50,50 +51,81 @@ async function readPage(page: Page, id: number, bookDir: string) {
 
 // Otherwise when using cookies book will be downloaded from last opened page
 async function goToBookStart(page: Page, id: string) {
-  // todo ебанутая проверка, можно просто со страницы книги найти ссыль на первую главу
-  await page.goto(`https://author.today/reader/${id}`);
-  while (true) {
-    const prevPageLink = await page.$x("//a[contains(text(), '←')]");
-    if (prevPageLink.length === 0) {
-      return;
-    }
-    log('Not book start, going to previous page');
-    await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
-    await prevPageLink[0].click();
+  const chaptersLink = await page.$x("//a[contains(@href, '#tab-chapters')]");
+  if (chaptersLink.length === 0) {
+    log('Oh shit, cant see chapters!');
+    process.exit(1);
   }
+  await chaptersLink[0].click();
+  await page.waitForTimeout(3000);
+  const firstChapterLink = await page.$x(`//a[contains(@href, '/${id}/')]`);
+  if (firstChapterLink.length === 0) {
+    log('Oh shit, cant see first chapter!');
+    process.exit(1);
+  }
+  await firstChapterLink[0].click();
+  await page.waitForTimeout(3000);
 }
 
-async function getBookTitle(page: Page, id: string) {
-  const url = `https://author.today/work/${id}`;
-  await page.goto(url);
+async function getBookTitle(page: Page) {
   const bookTitle = await page.title();
   return bookTitle
     .replace(' - читать книгу в онлайн-библиотеке', '')
-    .split('"')
-    .join('')
-    .split("'")
-    .join('');
+    .replace(/"/g, '')
+    .replace(/'/g, '');
+}
+
+async function getCoverImage(browser, page: Page) {
+  const image = await page.$x('//img[@class="cover-image"]');
+  if (image.length === 0) {
+    log('Oh shit, cant see cover image!');
+    process.exit(1);
+  }
+  const page2 = await browser.newPage();
+  const imageSrc = await image[0].getProperty('src');
+  const imageSrcString = await imageSrc.jsonValue();
+  log(`cover image: ${imageSrcString}`);
+  const imagePage = await page2.goto(imageSrcString);
+  const data = await imagePage.buffer();
+  await page2.close();
+  return data;
+}
+
+function getBookMeta(bookTitle: string) {
+  const [title, authors] = bookTitle
+    .split(' - ')
+    .map((el) => el
+      .trim()
+      .replace(/"/g, '')
+      .replace(/'/g, ''));
+  return { title, authors };
 }
 
 async function getBook(id: string, cookieFile: string) {
   const dir = join(__dirname, '/tmp/');
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
+    await fsp.mkdir(dir);
   }
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.newPage();
   const cookies:Array<SetCookie> = cookieFile ? JSON.parse(fs.readFileSync(cookieFile, 'utf-8')) : [];
-  log('Cookies:');
-  log(cookies);
+  // log('Cookies:');
+  // log(cookies);
   await page.setCookie(...cookies);
-  const bookTitle = await getBookTitle(page, id);
+  const url = `https://author.today/work/${id}`;
+  await page.goto(url);
+  const bookTitle = await getBookTitle(page);
+  const meta = getBookMeta(bookTitle);
+  const bookDir = join(dir, `/${meta.authors} ${meta.title}`);
+  if (!fs.existsSync(bookDir)) {
+    await fsp.mkdir(bookDir);
+  }
+  await fsp.writeFile(join(bookDir, '/meta.json'), JSON.stringify(meta), 'utf8');
+  const image = await getCoverImage(browser, page);
+  await fsp.writeFile(join(bookDir, '/cover.jpg'), image);
   await goToBookStart(page, id);
   let pageFound = true;
   let pageId = 1;
-  const bookDir = join(dir, `/${bookTitle}`);
-  if (!fs.existsSync(bookDir)) {
-    fs.mkdirSync(bookDir);
-  }
   while (pageFound) {
     pageFound = await readPage(page, pageId, bookDir);
     pageId++;

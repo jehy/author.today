@@ -1,27 +1,9 @@
+import { promises as fsp } from 'fs';
 import * as fs from 'fs';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import Debug from 'debug';
 import toFlags from 'to-flags';
-
-function fixText(text: string) {
-  const textSplit:string[] = text.replace(/\n\n/g, '\n').split('\n');
-  let startFrom = 0;
-  for (let i = 0; i < 10; i++) {
-    if (textSplit[i].trim() === 'Настройки') {
-      // Выделяем номер главы
-      textSplit[i + 1] = `<h1>${textSplit[i + 1]}</h1>`;
-      startFrom = i + 1;
-    }
-  }
-  let count = textSplit.length;
-  for (let i = textSplit.length - 1; i > textSplit.length - 10; i--) {
-    if (textSplit[i].startsWith('←')) {
-      count = i;
-    }
-  }
-  return textSplit.splice(startFrom, count - startFrom).join('<br>\n');
-}
 
 async function convert(input, output, bookName, options) {
   const log = Debug(`author.today:${bookName}:convertor`);
@@ -45,32 +27,44 @@ async function convert(input, output, bookName, options) {
   });
 }
 
+async function getMeta(bookDir:string){
+  const metaFileName = join(bookDir, `/meta.json`);
+  const data = await fsp.readFile(metaFileName, 'utf8');
+  return JSON.parse(data);
+}
+
 async function glueBook(bookName: string, tmpDir:string) {
-  const [name, author] = bookName.split(' - ').map((el) => el.trim());
-  const log = Debug(`author.today:${name}`);
+  const bookDir = join(tmpDir, `/${bookName}`);
+  const meta = await getMeta(bookDir);
+  const log = Debug(`author.today:${meta.title}`);
   log('Starting book');
   let data = '';
-  const bookDir = join(tmpDir, `/${bookName}`);
   const htmlFileName = join(bookDir, `/${bookName}.html`);
   for (let i = 1; i < 1000; i++) {
-    const chapterFileName = join(tmpDir, `${bookName}/${i}.txt`);
+    const chapterFileName = join(tmpDir, `${bookName}/${i}.html`);
     if (!fs.existsSync(chapterFileName)) {
-      fs.writeFileSync(htmlFileName, data, { encoding: 'utf8' });
+      await fsp.writeFile(htmlFileName, data, { encoding: 'utf8' });
       break;
     }
     log(`Found chapter ${i}`);
-    const newText = fs.readFileSync(chapterFileName, 'utf-8');
-    data += fixText(newText);
+    const newText = await fsp.readFile(chapterFileName, 'utf-8');
+    data += newText;
   }
-  const output = join(bookDir, `/${name}.mobi`);
+  const output = join(bookDir, `/${meta.title}.mobi`);
   const options = {
-    authors: author,
+    ...meta,
     pageBreaksBefore: '//h:h1',
     chapter: '//h:h1',
     insertBlankLine: true,
     insertBlankLineSize: '1',
     lineHeight: '12',
+    cover: undefined,
   };
+  const cover = join(bookDir, '/cover.jpg');
+  if (fs.existsSync(cover)) {
+    log('adding cover');
+    options.cover = cover;
+  }
   try {
     await convert(htmlFileName, output, bookName, options);
     log('converted');
@@ -82,7 +76,7 @@ async function glueBook(bookName: string, tmpDir:string) {
 
 async function glueBooks() {
   const tmpDir = join(__dirname, '/tmp');
-  const books = fs.readdirSync(tmpDir);
+  const books = await fsp.readdir(tmpDir);
   await Promise.all(books.map((book) => glueBook(book, tmpDir)));
   spawn('dolphin', [tmpDir]);
 }
