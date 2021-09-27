@@ -5,7 +5,7 @@ import Debug from 'debug';
 import toFlags from 'to-flags';
 
 function fixText(text: string) {
-  const textSplit:string[] = text.split('\n');
+  const textSplit:string[] = text.replace(/\n\n/g, '\n').split('\n');
   let startFrom = 0;
   for (let i = 0; i < 10; i++) {
     if (textSplit[i].trim() === 'Настройки') {
@@ -15,7 +15,7 @@ function fixText(text: string) {
     }
   }
   let count = textSplit.length;
-  for (let i = textSplit.length - 1; i > textSplit.length - 5; i--) {
+  for (let i = textSplit.length - 1; i > textSplit.length - 10; i--) {
     if (textSplit[i].startsWith('←')) {
       count = i;
     }
