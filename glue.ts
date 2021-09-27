@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import { join } from 'path';
+import { exec } from 'child_process';
 
-const books = fs.readdirSync(join(__dirname, '/tmp'));
+const bookDir = join(__dirname, '/tmp');
+const books = fs.readdirSync(bookDir);
 books.forEach((bookName) => {
   console.log(`Gluing book ${bookName}`);
   let data = '';
@@ -16,4 +18,5 @@ books.forEach((bookName) => {
     const newText = fs.readFileSync(filename, 'utf-8');
     data += newText;
   }
+  exec(`dolphin ${bookDir}`);
 });
