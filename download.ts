@@ -47,6 +47,7 @@ async function readPage(page: Page, id: number, bookDir: string) {
 
 // Otherwise when using cookies book will be downloaded from last opened page
 async function goToBookStart(page: Page, id: string) {
+  // todo ебанутая проверка, можно просто со страницы книги найти ссыль на первую главу
   await page.goto(`https://author.today/reader/${id}`);
   let notFirstPage = true;
   while (notFirstPage) {
@@ -70,7 +71,12 @@ async function getBookTitle(page: Page, id: string) {
   const url = `https://author.today/work/${id}`;
   await page.goto(url);
   const bookTitle = await page.title();
-  return bookTitle.replace(' - читать книгу в онлайн-библиотеке', '');
+  return bookTitle
+    .replace(' - читать книгу в онлайн-библиотеке', '')
+    .split('"')
+    .join('')
+    .split("'")
+    .join('');
 }
 
 async function getBook(id: string, cookieFile: string) {
