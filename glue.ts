@@ -3,9 +3,23 @@ import * as fs from 'fs';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import Debug from 'debug';
+import promiseMap from 'promise.map';
+// @ts-ignore
 import toFlags from 'to-flags';
 
-async function convert(input, output, bookName, options) {
+type ConvertOptions = {
+  authors:string,
+  title:string,
+  pageBreaksBefore: string,
+  chapter: string,
+  insertBlankLine: boolean,
+  insertBlankLineSize: string,
+  lineHeight: string,
+  cover?: string,
+};
+
+async function convert(input:string, output:string, bookName:string, options: ConvertOptions)
+  :Promise<void> {
   const log = Debug(`author.today:${bookName}:convertor`);
   return new Promise((resolve, reject) => {
     const run = spawn('ebook-convert', [input, output, ...toFlags(options)]);
@@ -27,13 +41,13 @@ async function convert(input, output, bookName, options) {
   });
 }
 
-async function getMeta(bookDir:string){
-  const metaFileName = join(bookDir, `/meta.json`);
+async function getMeta(bookDir:string):Promise<{ authors:string, title:string }> {
+  const metaFileName = join(bookDir, '/meta.json');
   const data = await fsp.readFile(metaFileName, 'utf8');
   return JSON.parse(data);
 }
 
-async function glueBook(bookName: string, tmpDir:string) {
+async function glueBook(bookName: string, tmpDir:string):Promise<void> {
   const bookDir = join(tmpDir, `/${bookName}`);
   const meta = await getMeta(bookDir);
   const log = Debug(`author.today:${meta.title}`);
@@ -51,14 +65,13 @@ async function glueBook(bookName: string, tmpDir:string) {
     data += newText;
   }
   const output = join(bookDir, `/${meta.title}.mobi`);
-  const options = {
+  const options:ConvertOptions = {
     ...meta,
     pageBreaksBefore: '//h:h1',
     chapter: '//h:h1',
     insertBlankLine: true,
     insertBlankLineSize: '1',
     lineHeight: '12',
-    cover: undefined,
   };
   const cover = join(bookDir, '/cover.jpg');
   if (fs.existsSync(cover)) {
@@ -74,10 +87,10 @@ async function glueBook(bookName: string, tmpDir:string) {
   }
 }
 
-async function glueBooks() {
+async function glueBooks():Promise<void> {
   const tmpDir = join(__dirname, '/tmp');
   const books = await fsp.readdir(tmpDir);
-  await Promise.all(books.map((book) => glueBook(book, tmpDir)));
+  await promiseMap(books, (book) => glueBook(book, tmpDir), 3);
   spawn('dolphin', [tmpDir]);
 }
 

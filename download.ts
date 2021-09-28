@@ -8,8 +8,9 @@ import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
 import { promises as fsp } from 'fs';
 import * as fs from 'fs';
 import { join } from 'path';
-import { Page, SetCookie } from 'puppeteer';
+import { Browser, Page, SetCookie } from 'puppeteer';
 import Debug from 'debug';
+import { SingleBar, Presets } from 'cli-progress';
 
 const log = Debug('author.today:download');
 
@@ -21,23 +22,28 @@ function randomIntFromInterval(min: number, max: number): number {
 
 async function getPageText(page: Page): Promise<string> {
   return page.evaluate(() => {
-    async function copyText(selector) {
+    async function copyText(selector: string) {
       const element = document.querySelector(selector);
       // copyText.select();
       // document.execCommand("Copy");
-      return element.innerHTML;
+      return element && element.innerHTML || '';
     }
 
     return copyText('#text-container');
   });
 }
 
-async function readPage(page: Page, id: number, bookDir: string) {
-  log(`Downloading page ${id}`);
-  await page.waitForTimeout(4000 + randomIntFromInterval(100, 2000));
+async function waitRandomTimeout(page: Page, minTimeout:number):Promise<void> {
+  await page.waitForTimeout(minTimeout + randomIntFromInterval(0, minTimeout / 2));
+}
+
+async function readPage(page: Page, id: number,
+  bookDir: string, progress: SingleBar):Promise<boolean> {
+  await waitRandomTimeout(page, 4000);
   const text = await getPageText(page);
   await fsp.writeFile(join(bookDir, `/${id}.html`), text, { encoding: 'utf-8' });
-  log(`${text.substr(0, 100).split('\n').join('')}...`);
+  const startText = `${text.substr(0, 100).split('\n').join(' ')}...`;
+  progress.increment(1, { startText });
   const nextPageLink = await page.$x("//a[contains(text(), '→')]");
 
   if (nextPageLink.length > 0) {
@@ -50,21 +56,22 @@ async function readPage(page: Page, id: number, bookDir: string) {
 }
 
 // Otherwise when using cookies book will be downloaded from last opened page
-async function goToBookStart(page: Page, id: string) {
+async function goToBookStartAndGetChapters(page: Page):Promise<number> {
   const chaptersLink = await page.$x("//a[contains(@href, '#tab-chapters')]");
   if (chaptersLink.length === 0) {
     log('Oh shit, cant see chapters!');
     process.exit(1);
   }
   await chaptersLink[0].click();
-  await page.waitForTimeout(3000);
-  const firstChapterLink = await page.$x(`//a[contains(@href, '/${id}/')]`);
-  if (firstChapterLink.length === 0) {
+  await waitRandomTimeout(page, 3000);
+  const chapterLinks = await page.$x('//div[@id="tab-chapters"]//a');
+  if (chapterLinks.length === 0) {
     log('Oh shit, cant see first chapter!');
     process.exit(1);
   }
-  await firstChapterLink[0].click();
-  await page.waitForTimeout(3000);
+  await chapterLinks[0].click();
+  await waitRandomTimeout(page, 3000);
+  return chapterLinks.length;
 }
 
 async function getBookTitle(page: Page) {
@@ -75,7 +82,7 @@ async function getBookTitle(page: Page) {
     .replace(/'/g, '');
 }
 
-async function getCoverImage(browser, page: Page) {
+async function getCoverImage(browser: Browser, page: Page):Promise<Buffer | null> {
   const image = await page.$x('//img[@class="cover-image"]');
   if (image.length === 0) {
     log('Oh shit, cant see cover image!');
@@ -83,10 +90,10 @@ async function getCoverImage(browser, page: Page) {
   }
   const page2 = await browser.newPage();
   const imageSrc = await image[0].getProperty('src');
-  const imageSrcString = await imageSrc.jsonValue();
+  const imageSrcString = await imageSrc.jsonValue() as string;
   log(`cover image: ${imageSrcString}`);
   const imagePage = await page2.goto(imageSrcString);
-  const data = await imagePage.buffer();
+  const data = imagePage && await imagePage.buffer();
   await page2.close();
   return data;
 }
@@ -101,18 +108,19 @@ function getBookMeta(bookTitle: string) {
   return { title, authors };
 }
 
-async function getBook(id: string, cookieFile: string) {
+async function getBook(id: string, cookieFile: string, headless: string) {
   const dir = join(__dirname, '/tmp/');
   if (!fs.existsSync(dir)) {
     await fsp.mkdir(dir);
   }
-  const browser = await puppeteer.launch({ headless: false });
+  const browser = await puppeteer.launch({ headless: headless === 'true' });
   const page = await browser.newPage();
   const cookies:Array<SetCookie> = cookieFile ? JSON.parse(fs.readFileSync(cookieFile, 'utf-8')) : [];
   // log('Cookies:');
   // log(cookies);
   await page.setCookie(...cookies);
   const url = `https://author.today/work/${id}`;
+  log(`Downloading book ${url}`);
   await page.goto(url);
   const bookTitle = await getBookTitle(page);
   const meta = getBookMeta(bookTitle);
@@ -122,18 +130,26 @@ async function getBook(id: string, cookieFile: string) {
   }
   await fsp.writeFile(join(bookDir, '/meta.json'), JSON.stringify(meta), 'utf8');
   const image = await getCoverImage(browser, page);
-  await fsp.writeFile(join(bookDir, '/cover.jpg'), image);
-  await goToBookStart(page, id);
+  if (image) {
+    await fsp.writeFile(join(bookDir, '/cover.jpg'), image);
+  }
+  const chapters = await goToBookStartAndGetChapters(page);
   let pageFound = true;
   let pageId = 1;
+  const progress = new SingleBar({
+    etaBuffer: 10,
+    format: 'Downloading [{bar}] {percentage}% | ETA: {eta_formatted} | {value}/{total} {startText}',
+  }, Presets.shades_classic);
+  progress.start(chapters, 0, { startText: '' });
   while (pageFound) {
-    pageFound = await readPage(page, pageId, bookDir);
+    pageFound = await readPage(page, pageId, bookDir, progress);
     pageId++;
   }
+  progress.stop();
   await browser.close();
 }
 
-getBook(process.argv[2], process.argv[3])
+getBook(process.argv[2], process.argv[3], process.argv[4])
   .then(() => process.exit(0))
   .catch((err) => {
     log(err);

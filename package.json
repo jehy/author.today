@@ -14,7 +14,9 @@
   "author": "Jehy<npm@jehy.ru>",
   "license": "MIT",
   "dependencies": {
+    "cli-progress": "3.9.1",
     "debug": "4.3.2",
+    "promise.map": "0.3.1",
     "puppeteer": "5.5.0",
     "puppeteer-extra": "^3.1.18",
     "puppeteer-extra-plugin-adblocker": "^2.11.11",
@@ -22,6 +24,7 @@
     "to-flags": "0.2.0"
   },
   "devDependencies": {
+    "@types/cli-progress": "3.9.2",
     "@typescript-eslint/eslint-plugin": "4.31.1",
     "@typescript-eslint/parser": "4.31.1",
     "eslint": "7.32.0",
