@@ -6,6 +6,7 @@ import Debug from 'debug';
 import promiseMap from 'promise.map';
 // @ts-ignore
 import toFlags from 'to-flags';
+import yargs from 'yargs/yargs';
 
 type ConvertOptions = {
   authors:string,
@@ -18,7 +19,7 @@ type ConvertOptions = {
   cover?: string,
 };
 
-async function convert(input:string, output:string, bookName:string, options: ConvertOptions)
+async function convertBook(input:string, output:string, bookName:string, options: ConvertOptions)
   :Promise<void> {
   const log = Debug(`author.today:${bookName}:convertor`);
   return new Promise((resolve, reject) => {
@@ -47,7 +48,7 @@ async function getMeta(bookDir:string):Promise<{ authors:string, title:string }>
   return JSON.parse(data);
 }
 
-async function glueBook(bookName: string, tmpDir:string):Promise<void> {
+async function glueBook(bookName: string, tmpDir:string, convert:boolean):Promise<void> {
   const bookDir = join(tmpDir, `/${bookName}`);
   const meta = await getMeta(bookDir);
   const log = Debug(`author.today:${meta.title}`);
@@ -64,6 +65,9 @@ async function glueBook(bookName: string, tmpDir:string):Promise<void> {
     const newText = await fsp.readFile(chapterFileName, 'utf-8');
     data += newText;
   }
+  if (!convert) {
+    return;
+  }
   const output = join(bookDir, `/${meta.title}.mobi`);
   const options:ConvertOptions = {
     ...meta,
@@ -79,7 +83,7 @@ async function glueBook(bookName: string, tmpDir:string):Promise<void> {
     options.cover = cover;
   }
   try {
-    await convert(htmlFileName, output, bookName, options);
+    await convertBook(htmlFileName, output, bookName, options);
     log('converted');
   } catch (err) {
     log(`Failed to convert ${bookName}`);
@@ -87,11 +91,28 @@ async function glueBook(bookName: string, tmpDir:string):Promise<void> {
   }
 }
 
-async function glueBooks():Promise<void> {
+async function glueBooks(convert: boolean, openDir: boolean):Promise<void> {
   const tmpDir = join(__dirname, '/tmp');
   const books = await fsp.readdir(tmpDir);
-  await promiseMap(books, (book) => glueBook(book, tmpDir), 3);
-  spawn('dolphin', [tmpDir]);
+  await promiseMap(books, (book) => glueBook(book, tmpDir, convert), 3);
+  if (openDir) {
+    spawn('dolphin', [tmpDir]);
+  }
 }
 
-glueBooks().then(() => process.exit(0));
+const argv = yargs(process.argv.slice(2))
+  .options({
+    convert: {
+      alias: 'c',
+      default: true,
+      type: 'boolean',
+    },
+    openDir: {
+      alias: 'o',
+      default: true,
+      type: 'boolean',
+    },
+  })
+  .help('help').parseSync();
+
+glueBooks(argv.convert, argv.openDir).then(() => process.exit(0));

@@ -11,6 +11,7 @@ import { join } from 'path';
 import { Browser, Page, SetCookie } from 'puppeteer';
 import Debug from 'debug';
 import { SingleBar, Presets } from 'cli-progress';
+import yargs from 'yargs/yargs';
 
 const log = Debug('author.today:download');
 
@@ -108,12 +109,12 @@ function getBookMeta(bookTitle: string) {
   return { title, authors };
 }
 
-async function getBook(id: string, cookieFile: string, headless: string) {
+async function getBook(id: number, cookieFile: string | null, headless: boolean) {
   const dir = join(__dirname, '/tmp/');
   if (!fs.existsSync(dir)) {
     await fsp.mkdir(dir);
   }
-  const browser = await puppeteer.launch({ headless: headless === 'true' });
+  const browser = await puppeteer.launch({ headless });
   const page = await browser.newPage();
   const cookies:Array<SetCookie> = cookieFile ? JSON.parse(fs.readFileSync(cookieFile, 'utf-8')) : [];
   // log('Cookies:');
@@ -149,9 +150,24 @@ async function getBook(id: string, cookieFile: string, headless: string) {
   await browser.close();
 }
 
-getBook(process.argv[2], process.argv[3], process.argv[4])
-  .then(() => process.exit(0))
-  .catch((err) => {
-    log(err);
-    process.exit(1);
-  });
+const argv = yargs(process.argv.slice(2))
+  .options({
+    bookId: {
+      alias: 'b',
+      type: 'number',
+      required: true,
+    },
+    cookiePath: {
+      alias: 'c',
+      default: null,
+      type: 'string',
+    },
+    headless: {
+      alias: 'h',
+      default: true,
+      type: 'boolean',
+    },
+  })
+  .help('help').parseSync();
+
+getBook(argv.bookId, argv.cookiePath, argv.headless).then(() => process.exit(0));
