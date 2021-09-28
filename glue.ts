@@ -7,17 +7,7 @@ import promiseMap from 'promise.map';
 // @ts-ignore
 import toFlags from 'to-flags';
 import yargs from 'yargs/yargs';
-
-type ConvertOptions = {
-  authors:string,
-  title:string,
-  pageBreaksBefore: string,
-  chapter: string,
-  insertBlankLine: boolean,
-  insertBlankLineSize: string,
-  lineHeight: string,
-  cover?: string,
-};
+import type { BookMeta, ConvertOptions } from './types';
 
 async function convertBook(input:string, output:string, bookName:string, options: ConvertOptions)
   :Promise<void> {
@@ -42,7 +32,7 @@ async function convertBook(input:string, output:string, bookName:string, options
   });
 }
 
-async function getMeta(bookDir:string):Promise<{ authors:string, title:string }> {
+async function getMeta(bookDir:string):Promise<BookMeta> {
   const metaFileName = join(bookDir, '/meta.json');
   const data = await fsp.readFile(metaFileName, 'utf8');
   return JSON.parse(data);

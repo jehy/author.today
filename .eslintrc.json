@@ -9,6 +9,7 @@
     "rules": {
         "no-plusplus": "off",
         "no-await-in-loop": "off",
-        "no-mixed-operators": "off"
+        "no-mixed-operators": "off",
+        "@typescript-eslint/consistent-type-imports": ["error", { "prefer": "type-imports" }]
     }
 }

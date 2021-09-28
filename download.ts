@@ -8,10 +8,11 @@ import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
 import { promises as fsp } from 'fs';
 import * as fs from 'fs';
 import { join } from 'path';
-import { Browser, Page, SetCookie } from 'puppeteer';
+import type { Browser, Page, SetCookie } from 'puppeteer';
 import Debug from 'debug';
 import { SingleBar, Presets } from 'cli-progress';
 import yargs from 'yargs/yargs';
+import type { BookMeta } from './types';
 
 const log = Debug('author.today:download');
 
@@ -75,7 +76,7 @@ async function goToBookStartAndGetChapters(page: Page):Promise<number> {
   return chapterLinks.length;
 }
 
-async function getBookTitle(page: Page) {
+async function getBookTitle(page: Page):Promise<string> {
   const bookTitle = await page.title();
   return bookTitle
     .replace(' - читать книгу в онлайн-библиотеке', '')
@@ -99,7 +100,7 @@ async function getCoverImage(browser: Browser, page: Page):Promise<Buffer | null
   return data;
 }
 
-function getBookMeta(bookTitle: string) {
+function getBookMeta(bookTitle: string):BookMeta {
   const [title, authors] = bookTitle
     .split(' - ')
     .map((el) => el
@@ -109,7 +110,7 @@ function getBookMeta(bookTitle: string) {
   return { title, authors };
 }
 
-async function getBook(id: number, cookieFile: string | null, headless: boolean) {
+async function getBook(id: number, cookieFile: string | null, headless: boolean):Promise<void> {
   const dir = join(__dirname, '/tmp/');
   if (!fs.existsSync(dir)) {
     await fsp.mkdir(dir);
