@@ -1,13 +1,27 @@
 import { promises as fsp } from 'fs';
 import * as fs from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { spawn } from 'child_process';
 import Debug from 'debug';
 import promiseMap from 'promise.map';
 // @ts-ignore
 import toFlags from 'to-flags';
 import yargs from 'yargs/yargs';
+import Axios from 'axios';
 import type { BookMeta, ConvertOptions } from './types';
+
+async function downloadImage(url: string, filepath: string) {
+  const response = await Axios({
+    url,
+    method: 'GET',
+    responseType: 'stream',
+  });
+  return new Promise((resolve, reject) => {
+    response.data.pipe(fs.createWriteStream(filepath))
+      .on('error', reject)
+      .once('close', () => resolve(filepath));
+  });
+}
 
 async function convertBook(input:string, output:string, bookName:string, options: ConvertOptions)
   :Promise<void> {
@@ -52,7 +66,22 @@ async function glueBook(bookName: string, tmpDir:string, convert:boolean):Promis
       break;
     }
     log(`Found chapter ${i}`);
-    const newText = await fsp.readFile(chapterFileName, 'utf-8');
+    let newText = await fsp.readFile(chapterFileName, 'utf-8');
+    const images = newText.match(/<img [^>]*src="[^"]*"[^>]*>/gm);
+    if (images && images.length) {
+      const sources = images.map((x) => x.replace(/.*src="([^"]*)".*/, '$1'));
+      for (let n = 0; n < sources.length; n++) {
+        const source = sources[n];
+        const name = basename(source);
+        const fileName = `${bookName}/${name}`;
+        if (!fs.existsSync(fileName)) {
+          log(`Downloading image ${source}`);
+          await downloadImage(source, join(tmpDir, fileName));
+        }
+        newText = newText.replace(source, name);
+      }
+    }
+
     data += newText;
   }
   if (!convert) {

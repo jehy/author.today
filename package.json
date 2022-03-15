@@ -14,6 +14,7 @@
   "author": "Jehy<npm@jehy.ru>",
   "license": "MIT",
   "dependencies": {
+    "axios": "0.26.1",
     "cli-progress": "3.9.1",
     "debug": "4.3.2",
     "promise.map": "0.3.1",
