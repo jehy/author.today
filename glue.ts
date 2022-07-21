@@ -87,7 +87,7 @@ async function glueBook(bookName: string, tmpDir:string, convert:boolean):Promis
   if (!convert) {
     return;
   }
-  const output = join(bookDir, `/${meta.title}.mobi`);
+  const output = join(bookDir, `/${meta.title}.epub`);
   const options:ConvertOptions = {
     ...meta,
     pageBreaksBefore: '//h:h1',
