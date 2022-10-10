@@ -3,7 +3,7 @@ import puppeteer from 'puppeteer-extra';
 // add stealth plugin and use defaults (all evasion techniques)
 
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
+//import AdblockerPlugin from 'puppeteer-extra-plugin-adblocker';
 
 import { promises as fsp } from 'fs';
 import * as fs from 'fs';
@@ -15,8 +15,9 @@ import yargs from 'yargs/yargs';
 import type { BookMeta } from './types';
 
 const log = Debug('author.today:download');
+log.enabled = true;
 
-puppeteer.use(AdblockerPlugin()).use(StealthPlugin());
+puppeteer.use(StealthPlugin());
 
 function randomIntFromInterval(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1) + min);

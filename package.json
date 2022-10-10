@@ -19,9 +19,9 @@
     "debug": "4.3.2",
     "promise.map": "0.3.1",
     "puppeteer": "5.5.0",
-    "puppeteer-extra": "^3.1.18",
-    "puppeteer-extra-plugin-adblocker": "^2.11.11",
-    "puppeteer-extra-plugin-stealth": "^2.7.8",
+    "puppeteer-extra": "3.3.4",
+    "puppeteer-extra-plugin-adblocker": "2.13.5",
+    "puppeteer-extra-plugin-stealth": "2.11.1",
     "to-flags": "0.2.0",
     "yargs": "17.2.1"
   },
